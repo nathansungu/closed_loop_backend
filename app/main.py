@@ -31,6 +31,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+#  start path with /api
 
 app.include_router(auth_router)
 app.include_router(account_router)

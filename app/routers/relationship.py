@@ -30,7 +30,7 @@ class RelationshipResponse(BaseModel):
 
 
 router = APIRouter(
-    prefix="/relationships",
+    prefix="/api/relationships",
     tags=["Relationships"],
 )
 

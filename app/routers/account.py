@@ -19,7 +19,7 @@ from app.services.account_service import (
 )
 
 router = APIRouter(
-    prefix="/accounts",
+    prefix="/api/accounts",
     tags=["Accounts"],
 )
 

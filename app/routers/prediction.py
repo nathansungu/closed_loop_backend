@@ -18,7 +18,7 @@ class PredictionItem(BaseModel):
 
 
 router = APIRouter(
-    prefix="/predictions",
+    prefix="/api/predictions",
     tags=["Predictions"],
 )
 

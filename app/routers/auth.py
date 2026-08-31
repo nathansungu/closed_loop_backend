@@ -99,7 +99,7 @@ class AuthResponse(BaseModel):
 
 
 router = APIRouter(
-    prefix="/auth",
+    prefix="/api/auth",
     tags=["Authentication"],
 )
 

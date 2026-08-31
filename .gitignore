@@ -1,0 +1,193 @@
+
+
+# =========================================================
+# PYTHON
+# =========================================================
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python build
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+wheels/
+
+# Python test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Python environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Virtual environment variations
+backend/venv/
+backend/.venv/
+backend/env/
+backend/ENV/
+
+.env
+.env.*
+!.env.example
+!.env.example.*
+!.env.template
+!.env.sample
+
+
+
+# =========================================================
+# DATABASE / LOCAL DATA
+# =========================================================
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+
+# Local database dumps
+*.sql
+*.sql.gz
+*.dump
+*.bak
+
+*.log
+logs/
+log/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =========================================================
+# TEMPORARY FILES
+# =========================================================
+
+*.tmp
+*.temp
+*.cache
+.cache/
+temp/
+tmp/
+
+# =========================================================
+# NODE / JAVASCRIPT / TYPESCRIPT
+# =========================================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Package manager caches
+.npm/
+
+# Debug
+.npm-debug.log*
+.yarn-debug.log*
+.yarn-error.log*
+
+# Build output
+dist/
+**/dist/
+
+build/
+**/build/
+
+# Vite
+.vite/
+**/.vite/
+
+# TypeScript
+*.tsbuildinfo
+
+# =========================================================
+# FRONTEND FRAMEWORK OUTPUT
+# =========================================================
+
+# React / Vite
+frontend/dist/
+frontend/.vite/
+
+#========================================================
+# PYTHON / FASTAPI SPECIFIC
+# =========================================================
+
+# Uploaded files
+uploads/
+backend/uploads/
+
+# Generated files
+backend/generated/
+backend/reports/
+
+# FastAPI local files
+backend/.fastapi/
+
+# =========================================================
+# ALEMBIC
+# =========================================================
+
+
+# Ignore Alembic temporary files
+**/__pycache__/
+**/*.pyc
+
+# =========================================================
+# TESTING
+# =========================================================
+
+.pytest_cache/
+
+
+# ML datasets
+datasets/
+data/
+
+# Keep model directories only if you explicitly want them:
+# !backend/models/
+
+# =========================================================
+# BACKUPS
+# =========================================================
+
+*.old
+*.orig
+*.backup
+*.bak
+*.swp
+
+# =========================================================
+# LOCAL CONFIGURATION
+# =========================================================
+
+config.local.*
+settings.local.*
+*.local.json
+*.local.yaml
+*.local.yml
+
+# =========================================================
+# SECRET / PRIVATE CONFIGURATION
+# =========================================================
+
+private/
+secrets/
+secret/

@@ -29,7 +29,7 @@ from app.services.cycle_service import (
 )
 
 router = APIRouter(
-    prefix="/api/cycles",
+    prefix="/cycles",
     tags=["Cycles"],
 )
 

@@ -39,7 +39,7 @@ class ParticipantResponse(BaseModel):
 
 
 router = APIRouter(
-    prefix="/api/participants",
+    prefix="/participants",
     tags=["Participants"],
 )
 

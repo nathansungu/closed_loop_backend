@@ -12,7 +12,7 @@ from app.models.user import User
 from app.routers.auth import get_current_user, hash_password, require_admin
 
 router = APIRouter(
-    prefix="/api/users",
+    prefix="/users",
     tags=["Users & Team Management"],
 )
 

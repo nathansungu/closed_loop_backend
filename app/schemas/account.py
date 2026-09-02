@@ -15,6 +15,8 @@ class AccountResponse(BaseModel):
     id: int
     uuid: str
     name: str
+    is_active: bool = True
+    owner_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

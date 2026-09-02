@@ -132,6 +132,7 @@ def create_team_member(
         account_id=current_user.account_id,
         role=role,
         is_active=True,
+        is_verified=True,
     )
     db.add(user)
     db.commit()

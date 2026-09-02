@@ -2,19 +2,20 @@ import base64
 import hashlib
 import hmac
 import json
-import time
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.account import Account
 from app.models.user import User
+from app.services.email_service import generate_verification_code, send_verification_email
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "closed-loop-super-secret-key-for-development-tokens"
@@ -70,6 +71,16 @@ class RegisterResponse(BaseModel):
     message: str
     email: str
     organization_name: str
+    requires_verification: bool = True
+
+
+class VerifyEmailRequest(BaseModel):
+    email: str
+    code: str
+
+
+class ResendCodeRequest(BaseModel):
+    email: str
 
 
 class LoginRequest(BaseModel):
@@ -85,11 +96,11 @@ class UserResponse(BaseModel):
     role: str
     account_id: int
     is_active: bool
+    is_verified: bool = True
     created_at: datetime
     organization_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuthResponse(BaseModel):
@@ -135,6 +146,11 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been disabled. Please contact your organization administrator.",
         )
+    if not getattr(user, "is_verified", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address not verified. Please verify your email to access your account.",
+        )
     return user
 
 
@@ -151,7 +167,7 @@ def get_optional_current_user(
             return None
         user_id = int(payload["sub"])
         user = db.get(User, user_id)
-        if user and user.is_active:
+        if user and user.is_active and getattr(user, "is_verified", True):
             return user
         return None
     except Exception:
@@ -159,7 +175,7 @@ def get_optional_current_user(
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "super_admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrator permissions required for this action.",
@@ -196,6 +212,9 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
             detail="Something is wrong with your details: An account with this email address already exists. Please log in or use a different email.",
         )
 
+    code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=15)
+
     # 1. Create a dedicated new Organization / Account instance
     org_name = (
         data.organization_name.strip()
@@ -206,7 +225,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.add(new_account)
     db.flush()
 
-    # 2. Create the User as the Admin of this new organization
+    # 2. Create the User as unverified Admin of this new organization
     user = User(
         name=clean_name,
         email=clean_email,
@@ -214,6 +233,9 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         account_id=new_account.id,
         role="admin",
         is_active=True,
+        is_verified=False,
+        verification_code=code,
+        verification_code_expires_at=expires_at,
     )
     db.add(user)
     db.flush()
@@ -225,11 +247,134 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(user)
     db.refresh(new_account)
 
-    # DO NOT log them in automatically - return success response asking them to sign in
+    # 4. Dispatch verification email
+    send_verification_email(clean_email, clean_name, code)
+
     return {
-        "message": "Account and organization created successfully. Please log in with your email and password.",
+        "message": "A 6-digit verification code has been sent to your email.",
         "email": user.email,
         "organization_name": new_account.name,
+        "requires_verification": True,
+    }
+
+
+@router.post("/verify-email", response_model=AuthResponse)
+def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
+    clean_email = data.email.lower().strip()
+    clean_code = data.code.strip()
+
+    user = db.execute(select(User).where(User.email == clean_email)).scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found. Please register first.",
+        )
+
+    if user.is_verified:
+        # Already verified: generate login token
+        account = db.get(Account, user.account_id)
+        org_name = account.name if account else "Organization"
+        token = create_access_token(
+            {
+                "sub": str(user.id),
+                "email": user.email,
+                "name": user.name,
+                "role": user.role,
+                "account_id": user.account_id,
+            }
+        )
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "uuid": user.uuid,
+                "name": user.name,
+                "email": user.email,
+                "role": user.role,
+                "account_id": user.account_id,
+                "is_active": user.is_active,
+                "is_verified": True,
+                "created_at": user.created_at,
+                "organization_name": org_name,
+            },
+        }
+
+    if not user.verification_code or user.verification_code != clean_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid 6-digit verification code. Please check your email and try again.",
+        )
+
+    if user.verification_code_expires_at and datetime.utcnow() > user.verification_code_expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please click 'Resend Code' to receive a new one.",
+        )
+
+    # Verification successful! Mark verified and clear code
+    user.is_verified = True
+    user.verification_code = None
+    user.verification_code_expires_at = None
+    db.commit()
+    db.refresh(user)
+
+    account = db.get(Account, user.account_id)
+    org_name = account.name if account else "Organization"
+
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "email": user.email,
+            "name": user.name,
+            "role": user.role,
+            "account_id": user.account_id,
+        }
+    )
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "uuid": user.uuid,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "account_id": user.account_id,
+            "is_active": user.is_active,
+            "is_verified": True,
+            "created_at": user.created_at,
+            "organization_name": org_name,
+        },
+    }
+
+
+@router.post("/resend-code")
+def resend_verification_code(data: ResendCodeRequest, db: Session = Depends(get_db)):
+    clean_email = data.email.lower().strip()
+    user = db.execute(select(User).where(User.email == clean_email)).scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    if user.is_verified:
+        return {"message": "Your email is already verified. You can sign in immediately."}
+
+    code = generate_verification_code()
+    expires_at = datetime.utcnow() + timedelta(minutes=15)
+
+    user.verification_code = code
+    user.verification_code_expires_at = expires_at
+    db.commit()
+
+    send_verification_email(user.email, user.name, code)
+
+    return {
+        "message": f"A new 6-digit verification code has been sent to {user.email}.",
+        "email": user.email,
     }
 
 
@@ -247,6 +392,19 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been disabled. Please contact your organization administrator.",
+        )
+
+    if not getattr(user, "is_verified", True):
+        # Trigger code send and notify user to verify
+        code = generate_verification_code()
+        user.verification_code = code
+        user.verification_code_expires_at = datetime.utcnow() + timedelta(minutes=15)
+        db.commit()
+        send_verification_email(user.email, user.name, code)
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. A 6-digit verification code has been sent to your email. Please verify to sign in.",
         )
 
     account = db.get(Account, user.account_id)
@@ -273,6 +431,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             "role": user.role,
             "account_id": user.account_id,
             "is_active": user.is_active,
+            "is_verified": user.is_verified,
             "created_at": user.created_at,
             "organization_name": org_name,
         },
@@ -291,6 +450,7 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         "role": current_user.role,
         "account_id": current_user.account_id,
         "is_active": current_user.is_active,
+        "is_verified": getattr(current_user, "is_verified", True),
         "created_at": current_user.created_at,
         "organization_name": org_name,
     }

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -20,6 +20,13 @@ class Cycle(Base):
         unique=True,
         nullable=False,
         default=lambda: str(uuid.uuid4()),
+    )
+
+    # Per-account continuous sequence number (1, 2, 3...)
+    cycle_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
     )
 
     # =========================================================
@@ -95,4 +102,12 @@ class Cycle(Base):
         "Transaction",
         back_populates="cycle",
         cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "account_id",
+            "cycle_number",
+            name="unique_account_cycle_number",
+        ),
     )

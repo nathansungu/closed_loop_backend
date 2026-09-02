@@ -50,20 +50,26 @@ def get_account(
 
 def get_cycle(
     db: Session,
-    cycle_id: int,
+    cycle_id: int | str,
     account_id: int | None = None,
 ):
     """
-    Get a cycle by ID.
+    Get a cycle by database ID or UUID.
 
     When account_id is supplied, the cycle must belong
     to that account.
     """
-
-    cycle = db.get(
-        Cycle,
-        cycle_id,
-    )
+    if isinstance(cycle_id, int):
+        cycle = db.get(Cycle, cycle_id)
+    elif isinstance(cycle_id, str):
+        if cycle_id.isdigit():
+            cycle = db.get(Cycle, int(cycle_id))
+        else:
+            cycle = db.execute(
+                select(Cycle).where(Cycle.uuid == cycle_id)
+            ).scalar_one_or_none()
+    else:
+        cycle = None
 
     if cycle is None:
         return None
@@ -78,7 +84,7 @@ def get_all_cycles(
     db: Session,
     account_id: int,
 ):
-    """Return all cycles belonging to an account."""
+    """Return all cycles belonging to an account ordered by cycle_number descending."""
 
     result = db.execute(
         select(Cycle)
@@ -86,7 +92,7 @@ def get_all_cycles(
             Cycle.account_id == account_id,
         )
         .order_by(
-            Cycle.id.desc(),
+            Cycle.cycle_number.desc(),
         )
     )
 
@@ -407,7 +413,7 @@ def create_cycle(
     account_id: int,
 ):
     """
-    Create an empty pending cycle.
+    Create an empty pending cycle with per-account continuous cycle_number.
     """
 
     account = get_account(
@@ -418,8 +424,15 @@ def create_cycle(
     if account is None:
         raise ValueError("Account not found.")
 
+    max_num = db.execute(
+        select(func.coalesce(func.max(Cycle.cycle_number), 0))
+        .where(Cycle.account_id == account_id)
+    ).scalar_one()
+    next_cycle_number = max_num + 1
+
     cycle = Cycle(
         account_id=account_id,
+        cycle_number=next_cycle_number,
         status=PENDING,
     )
 

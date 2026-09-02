@@ -83,6 +83,7 @@ class GeneratedCycleResponse(BaseModel):
 class CycleResponse(BaseModel):
     id: int
     uuid: str
+    cycle_number: int
     account_id: int
     status: str
     created_at: datetime

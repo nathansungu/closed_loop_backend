@@ -14,6 +14,7 @@ from app.models import (
     Transaction,
 )
 from app.services.cycle_engine import MIN_PARTICIPANTS, format_cycle, generate_valid_cycle_pair
+from app.services.relationship_service import record_cycle_usage
 from app.services.transaction_service import (
     calculate_outgoing_transactions,
     calculate_return_transactions,
@@ -637,6 +638,19 @@ def complete_outgoing_round(
     if cycle.status != OUTGOING_ACTIVE:
         raise ValueError("The outgoing round is not currently active.")
 
+    # Record outgoing cycle relationship usage
+    try:
+        mapping = get_cycle_mapping_flow(db=db, cycle_id=cycle_id)
+        outgoing_cycle = [
+            p["id"]
+            for p in mapping.get("outgoing_cycle", [])
+            if isinstance(p, dict) and "id" in p
+        ]
+        if len(outgoing_cycle) >= 2:
+            record_cycle_usage(db=db, cycle=outgoing_cycle)
+    except Exception:
+        pass
+
     cycle.status = OUTGOING_COMPLETED
 
     db.commit()
@@ -692,6 +706,19 @@ def settle_cycle(
 
     if cycle.status != RETURN_ACTIVE:
         raise ValueError("The return round must be active " "before the cycle can be settled.")
+
+    # Record return cycle relationship usage
+    try:
+        mapping = get_cycle_mapping_flow(db=db, cycle_id=cycle_id)
+        return_cycle = [
+            p["id"]
+            for p in mapping.get("return_cycle", [])
+            if isinstance(p, dict) and "id" in p
+        ]
+        if len(return_cycle) >= 2:
+            record_cycle_usage(db=db, cycle=return_cycle)
+    except Exception:
+        pass
 
     cycle.status = SETTLED
 
@@ -774,6 +801,7 @@ def get_account_relationships(
         )
         .where(
             Participant.account_id == account_id,
+            Relationship.is_active.is_(True),
         )
     )
 

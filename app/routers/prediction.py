@@ -35,7 +35,10 @@ def get_account_predictions(
         raise HTTPException(status_code=404, detail="Account not found")
 
     participants = db.execute(
-        select(Participant.id).where(Participant.account_id == account_id)
+        select(Participant.id).where(
+            Participant.account_id == account_id,
+            Participant.is_active.is_(True),
+        )
     ).scalars().all()
 
     if len(participants) < 5:
@@ -49,6 +52,7 @@ def get_account_predictions(
         select(Relationship).where(
             Relationship.from_participant_id.in_(p_set),
             Relationship.to_participant_id.in_(p_set),
+            Relationship.is_active.is_(True),
         )
     ).scalars().all()
 

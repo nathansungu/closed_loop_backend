@@ -480,6 +480,7 @@ def get_relationship_graph_for_account(
         )
         .where(
             Participant.account_id == account_id,
+            Relationship.is_active.is_(True),
         )
     )
 

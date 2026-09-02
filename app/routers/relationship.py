@@ -16,11 +16,16 @@ class RelationshipCreate(BaseModel):
     to_participant_id: int
 
 
+class RelationshipUpdate(BaseModel):
+    is_active: bool | None = None
+
+
 class RelationshipResponse(BaseModel):
     id: int
     from_participant_id: int
     to_participant_id: int
     times_used: int
+    is_active: bool = True
     first_used_at: datetime | None = None
     last_used_at: datetime | None = None
     created_at: datetime
@@ -182,6 +187,34 @@ def auto_create_directed_ring(account_id: int, db: Session = Depends(get_db)):
         db.refresh(rel)
 
     return created_relationships
+
+@router.put("/{relationship_id}", response_model=RelationshipResponse)
+def update_relationship(
+    relationship_id: int,
+    data: RelationshipUpdate,
+    current_user: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    rel = db.get(Relationship, relationship_id)
+    if not rel:
+        raise HTTPException(status_code=404, detail="Relationship not found")
+
+    from_p = db.get(Participant, rel.from_participant_id)
+    if from_p:
+        account = db.get(Account, from_p.account_id)
+        if current_user and current_user.account_id != from_p.account_id and (not account or account.owner_id != current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: You cannot modify relationships in another organization.",
+            )
+
+    if data.is_active is not None:
+        rel.is_active = data.is_active
+
+    db.commit()
+    db.refresh(rel)
+    return rel
+
 
 @router.delete("/{relationship_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_relationship(relationship_id: int, db: Session = Depends(get_db)):

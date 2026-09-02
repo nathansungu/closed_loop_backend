@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Integer,
     ForeignKey,
@@ -45,6 +46,12 @@ class Relationship(Base):
     times_used: Mapped[int] = mapped_column(
         Integer,
         default=0,
+        nullable=False,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
         nullable=False,
     )
 
